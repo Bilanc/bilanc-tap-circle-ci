@@ -78,6 +78,13 @@
         "null",
         "string"
       ]
+    },
+    "inserted_at": {
+      "type": [
+        "null",
+        "string"
+      ],
+      "format": "date-time"
     }
   }
 }

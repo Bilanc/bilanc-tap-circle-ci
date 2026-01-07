@@ -8,6 +8,7 @@ from singer import (
     get_bookmark,
     get_logger,
     metrics,
+    utils,
     write_record,
     write_state,
 )
@@ -85,6 +86,7 @@ class Workflows(IncrementalStream):
                     parent_record_ids, records, max_bookmark = self.get_records(pipeline_id, bookmark_date)
                     pipeline_wflo_ids += parent_record_ids
                     for rec in records:
+                        rec['inserted_at'] = utils.now().isoformat()
                         write_record(self.tap_stream_id, transformer.transform(rec, schema, stream_metadata))
                         counter.increment()
 
