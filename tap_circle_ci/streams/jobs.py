@@ -7,6 +7,7 @@ from singer import (
     get_bookmark,
     get_logger,
     metrics,
+    utils,
     write_record,
     write_state,
 )
@@ -70,6 +71,7 @@ class Jobs(FullTableStream):
                     LOGGER.info("Syncing jobs for workflow *****%s (%s/%s)", workflow_id[-4:], index, prod_len)
                     for rec in self.get_records(workflow_id):
                         rec["_workflow_id"], rec["_pipeline_id"] = workflow_id, pipeline_id
+                        rec['inserted_at'] = utils.now().isoformat()
                         write_record(self.tap_stream_id, transformer.transform(rec, schema, stream_metadata))
                         counter.increment()
                     state = self.write_bookmark(state, "currently_syncing", workflow_id)

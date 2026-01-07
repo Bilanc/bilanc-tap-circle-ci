@@ -1,7 +1,7 @@
 """tap-circle-ci unsubsrcibers stream module."""
 from typing import Dict, Iterator, List
 
-from singer import Transformer, get_logger, metrics, write_record
+from singer import Transformer, get_logger, metrics, utils, write_record
 from singer.utils import strftime, strptime_to_utc
 
 from .abstracts import IncrementalStream
@@ -32,7 +32,7 @@ class Pipelines(IncrementalStream):
             while True:
                 response = self.client.get(extraction_url, params, {})
                 page_counter.increment()
-                next_page_token = response["next_page_token"]
+                next_page_token = response.get("next_page_token")
                 raw_records = response.get("items", [])
                 if not raw_records:
                     break
@@ -56,6 +56,7 @@ class Pipelines(IncrementalStream):
                     LOGGER.error("Unable to process Record, Exception occurred: %s for stream %s", err, self.__class__)
                     raise err
                 if record_timestamp >= current_bookmark_date_utc:
+                    record['inserted_at'] = utils.now().isoformat()
                     transformed_record = transformer.transform(record, schema, stream_metadata)
                     write_record(self.tap_stream_id, transformed_record)
                     counter.increment()

@@ -8,6 +8,7 @@ from singer import (
     get_bookmark,
     get_logger,
     metrics,
+    utils,
     write_bookmark,
     write_record,
 )
@@ -155,6 +156,7 @@ class IncrementalStream(BaseStream):
                     LOGGER.error("Unable to process Record, Exception occurred: %s for stream %s", _, self.__class__)
                     continue
                 if record_timestamp >= current_bookmark_date_utc:
+                    record['inserted_at'] = utils.now().isoformat()
                     transformed_record = transformer.transform(record, schema, stream_metadata)
                     write_record(self.tap_stream_id, transformed_record)
                     counter.increment()
@@ -178,6 +180,7 @@ class FullTableStream(BaseStream):
         """Abstract implementation for `type: Fulltable` stream."""
         with metrics.record_counter(self.tap_stream_id) as counter:
             for record in self.get_records():
+                record['inserted_at'] = utils.now().isoformat()
                 transformed_record = transformer.transform(record, schema, stream_metadata)
                 write_record(self.tap_stream_id, transformed_record)
                 counter.increment()
