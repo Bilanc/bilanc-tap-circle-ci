@@ -9,7 +9,7 @@ from singer.metrics import Counter, Timer
 from tap_circle_ci.discover import discover
 from tap_circle_ci.sync import sync
 
-REQUIRED_CONFIG_KEYS = ["start_date", "token", "project_slugs"]
+REQUIRED_CONFIG_KEYS = ["start_date", "token"]
 LOGGER = get_logger()
 
 
