@@ -20,12 +20,21 @@ def get_all_projects(client: Client) -> list:
         headers={},
     )
     for project in response:
-        project_id: str = project["vcs_url"].split("/")[-1]
-        response = client.get(
-            endpoint=f"https://circleci.com/api/v2/project/{project_id}",
-            params={},
-            headers={},
-        )
+        vcs_type: str = project["vcs_type"]
+        if vcs_type == "circleci":
+            project_id: str = project["vcs_url"].split("/")[-1]
+            response = client.get(
+                endpoint=f"https://circleci.com/api/v2/project/{project_id}",
+                params={},
+                headers={},
+            )
+        else:
+            project_id: str = f"{vcs_type}/{project['username']}/{project['reponame']}"
+            response = client.get(
+                endpoint=f"https://circleci.com/api/v2/project/{project_id}",
+                params={},
+                headers={},
+            )
         project_slug: str = response.get("slug")
         if not project_slug:
             LOGGER.warning("Could not fetch slug for project ID: %s", project_id)
