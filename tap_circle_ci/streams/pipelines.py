@@ -49,13 +49,13 @@ class Pipelines(IncrementalStream):
 
         with metrics.record_counter(self.tap_stream_id) as counter:
             for record in self.get_records():
-                pipeline_ids.append(record["id"])
                 try:
                     record_timestamp = strptime_to_utc(record[self.replication_key])
                 except IndexError as err:
                     LOGGER.error("Unable to process Record, Exception occurred: %s for stream %s", err, self.__class__)
                     raise err
                 if record_timestamp >= current_bookmark_date_utc:
+                    pipeline_ids.append(record["id"])
                     record['inserted_at'] = utils.now().isoformat()
                     transformed_record = transformer.transform(record, schema, stream_metadata)
                     write_record(self.tap_stream_id, transformed_record)
