@@ -49,6 +49,7 @@ class Client:
         self._circle_token = self.config.get("token")
         self.shared_pipeline_ids = None
         self.shared_workflow_ids = None
+        self.shared_workflow_names = None
 
     def authenticate(self, headers: Optional[dict], params: Optional[dict]) -> Tuple[Dict, Dict]:
         """Updates Headers and Params based on api version of the stream."""

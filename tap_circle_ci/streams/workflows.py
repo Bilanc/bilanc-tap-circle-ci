@@ -53,7 +53,7 @@ class Workflows(IncrementalStream):
         config_start = self.client.config.get(self.config_start_key, False)
         bookmark_date = bookmark_date or config_start
         bookmark_date = current_max = max(strptime_to_utc(bookmark_date), strptime_to_utc(config_start))
-        filtered_records, parent_record_ids = [], []
+        filtered_records, parent_record_ids, parent_record_names, parent_record_names_tracker = [], [], [], []
         while True:
             response = self.client.get(extraction_url, params, {})
             raw_records = response.get("items", [])
@@ -62,6 +62,9 @@ class Workflows(IncrementalStream):
                 break
             for record in raw_records:
                 parent_record_ids.append((record["id"], pipeline_id))
+                if record["name"] not in parent_record_names_tracker:
+                    parent_record_names.append((record["name"], pipeline_id))
+                    parent_record_names_tracker.append(record["name"])
                 record_timestamp = strptime_to_utc(record[self.replication_key])
                 if record_timestamp >= bookmark_date:
                     current_max = max(current_max, record_timestamp)
@@ -69,7 +72,7 @@ class Workflows(IncrementalStream):
             if next_page_token is None:
                 break
             params["page-token"] = next_page_token
-        return (parent_record_ids, filtered_records, current_max)
+        return (parent_record_ids, parent_record_names, filtered_records, current_max)
 
     def sync(self, state: Dict, schema: Dict, stream_metadata: Dict, transformer: Transformer) -> Dict:
         """Sync implementation for `product_reviews` stream."""
@@ -79,14 +82,16 @@ class Workflows(IncrementalStream):
             LOGGER.info("STARTING SYNC FROM INDEX %s", start_index)
             prod_len = len(pipelines)
             pipeline_wflo_ids = []
+            pipeline_wflo_names = []
             with metrics.Counter(self.tap_stream_id) as counter:
                 for index, pipeline_id in enumerate(pipelines[start_index:], max(start_index, 1)):
                     LOGGER.info("Syncing workflows for pipeline *****%s (%s/%s)", pipeline_id[-4:], index, prod_len)
                     bookmark_date = self.get_bookmark(state, pipeline_id)
-                    parent_record_ids, records, max_bookmark = self.get_records(pipeline_id, bookmark_date)
+                    parent_record_ids, parent_record_names, records, max_bookmark = self.get_records(pipeline_id, bookmark_date)
                     pipeline_wflo_ids += parent_record_ids
+                    pipeline_wflo_names += parent_record_names
                     for rec in records:
-                        rec['inserted_at'] = utils.now().isoformat()
+                        rec["inserted_at"] = utils.now().isoformat()
                         write_record(self.tap_stream_id, transformer.transform(rec, schema, stream_metadata))
                         counter.increment()
 
@@ -96,8 +101,12 @@ class Workflows(IncrementalStream):
                     write_state(state)
                 if self.client.shared_workflow_ids is None:
                     self.client.shared_workflow_ids = {}
+                if self.client.shared_workflow_names is None:
+                    self.client.shared_workflow_names = {}
             pipeline_wflo_ids.sort(key=lambda x: x[1])
+            pipeline_wflo_names.sort(key=lambda x: x[1])
             self.client.shared_workflow_ids.update({self.project: pipeline_wflo_ids})
+            self.client.shared_workflow_names.update({self.project: pipeline_wflo_names})
             state = clear_bookmark(state, self.tap_stream_id, "currently_syncing")
         return state
 
@@ -118,11 +127,38 @@ class Workflows(IncrementalStream):
         LOGGER.info("Fetching all workflow records for Pipelines")
         pipeline_len = len(project_pipeline_ids)
         LOGGER.info("Total Pipelines %s for project %s", pipeline_len, self.project)
-        pipeline_wflo_ids = []
         for index, pipeline_id in enumerate(project_pipeline_ids):
             LOGGER.info("Fetching workflows for pipeline *****%s (%s/%s)", pipeline_id[-4:], index, pipeline_len)
             parent_ids, *_ = self.get_records(pipeline_id, None)
             pipeline_wflo_ids += parent_ids
         pipeline_wflo_ids.sort(key=lambda x: x[1])
+        LOGGER.info("Total workflows fetched %s for project %s", len(pipeline_wflo_ids), self.project)
         self.client.shared_workflow_ids = {self.project: pipeline_wflo_ids}
         return pipeline_wflo_ids
+    
+    def prefetch_workflow_names(self, project) -> List:
+        """Helper method implemented for other streams to load all parent
+        workflow_names.
+
+        eg: workflow id's are required to fetch `insights`
+        """
+        # This stream is a child stream of the `pipeline` stream hence it requires prefetching of pipelines to fetch all workflows
+        workflow_names = self.client.shared_workflow_names or {}
+        LOGGER.info(workflow_names)
+        pipeline_wflo_names = []
+        self.project = project
+        if workflow_names and self.project in workflow_names:
+            return workflow_names[self.project]
+
+        project_pipeline_ids = Pipelines(self.client).prefetch_pipeline_ids(self.project)
+        LOGGER.info("Fetching all workflow records for Pipelines")
+        pipeline_len = len(project_pipeline_ids)
+        LOGGER.info("Total Pipelines %s for project %s", pipeline_len, self.project)
+        for index, pipeline_id in enumerate(project_pipeline_ids):
+            LOGGER.info("Fetching workflows for pipeline *****%s (%s/%s)", pipeline_id[-4:], index, pipeline_len)
+            parent_ids, parent_names, *_ = self.get_records(pipeline_id, None)
+            pipeline_wflo_names += parent_names
+        pipeline_wflo_names.sort(key=lambda x: x[1])
+        self.client.shared_workflow_names = {self.project: pipeline_wflo_names}
+        return pipeline_wflo_names
+
