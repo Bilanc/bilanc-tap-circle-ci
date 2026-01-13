@@ -25,7 +25,7 @@ class WorkflowMetrics(IncrementalStream):
 
     stream = "workflow_metrics"
     tap_stream_id = "workflow_metrics"
-    key_properties = ["id", "_pipeline_id"]
+    key_properties = ["id"]
     url_endpoint = "https://circleci.com/api/v2/insights/PROJECT/workflows/WORKFLOW_NAME?all-branches=true"
     project = None
     replication_key = "created_at"
