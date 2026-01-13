@@ -45,7 +45,7 @@ class Workflows(IncrementalStream):
                     break
         return shared_pipeline_ids, last_sync_index
 
-    def get_records(self, pipeline_id: str, bookmark_date: str) -> Tuple[List, datetime]:
+    def get_records(self, pipeline_id: str, bookmark_date: str, parent_record_tracker: List[str] = []) -> Tuple[List, datetime]:
         # pylint: disable=W0221
         """performs api querying and pagination of response."""
         params = {}
@@ -53,7 +53,7 @@ class Workflows(IncrementalStream):
         config_start = self.client.config.get(self.config_start_key, False)
         bookmark_date = bookmark_date or config_start
         bookmark_date = current_max = max(strptime_to_utc(bookmark_date), strptime_to_utc(config_start))
-        filtered_records, parent_record_ids, parent_record_names, parent_record_names_tracker = [], [], [], []
+        filtered_records, parent_record_ids, parent_record_names = [], [], []
         while True:
             response = self.client.get(extraction_url, params, {})
             raw_records = response.get("items", [])
@@ -62,9 +62,9 @@ class Workflows(IncrementalStream):
                 break
             for record in raw_records:
                 parent_record_ids.append((record["id"], pipeline_id))
-                if record["name"] not in parent_record_names_tracker:
+                if record["name"] not in parent_record_tracker:
                     parent_record_names.append((record["name"], pipeline_id))
-                    parent_record_names_tracker.append(record["name"])
+                    parent_record_tracker.append(record["name"])
                 record_timestamp = strptime_to_utc(record[self.replication_key])
                 if record_timestamp >= bookmark_date:
                     current_max = max(current_max, record_timestamp)
@@ -156,7 +156,7 @@ class Workflows(IncrementalStream):
         LOGGER.info("Total Pipelines %s for project %s", pipeline_len, self.project)
         for index, pipeline_id in enumerate(project_pipeline_ids):
             LOGGER.info("Fetching workflows for pipeline *****%s (%s/%s)", pipeline_id[-4:], index, pipeline_len)
-            parent_ids, parent_names, *_ = self.get_records(pipeline_id, None)
+            parent_ids, parent_names, *_ = self.get_records(pipeline_id, None, pipeline_wflo_names)
             pipeline_wflo_names += parent_names
         pipeline_wflo_names.sort(key=lambda x: x[1])
         self.client.shared_workflow_names = {self.project: pipeline_wflo_names}
