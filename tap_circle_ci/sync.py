@@ -20,9 +20,9 @@ def get_all_projects(client: Client, org_slug: str) -> list:
         params=params,
         headers={},
     )
-    return [f"{org_slug}/{project}" for project in response.get('all_projects', [])]
-        
-    
+    return [f"{org_slug}/{project}" for project in response.get("all_projects", [])]
+
+
 def sync(config: dict, state: Dict, catalog: singer.Catalog):
     """performs sync for selected streams."""
     client = Client(config)
