@@ -10,37 +10,17 @@ from tap_circle_ci.streams import STREAMS
 LOGGER = singer.get_logger()
 
 
-def get_all_projects(client: Client) -> list:
+def get_all_projects(client: Client, org_slug: str) -> list:
     """Fetches all projects available in the CircleCI account."""
-    all_projects = []
+    if not org_slug:
+        return []
     params = {}
     response = client.get(
-        endpoint="https://circleci.com/api/v1.1/projects",
+        endpoint=f"https://circleci.com/api/v2/insights/{org_slug}/summary",
         params=params,
         headers={},
     )
-    for project in response:
-        vcs_type: str = project["vcs_type"]
-        if vcs_type == "circleci":
-            project_id: str = project["vcs_url"].split("/")[-1]
-            response = client.get(
-                endpoint=f"https://circleci.com/api/v2/project/{project_id}",
-                params={},
-                headers={},
-            )
-        else:
-            project_id: str = f"{vcs_type}/{project['username']}/{project['reponame']}"
-            response = client.get(
-                endpoint=f"https://circleci.com/api/v2/project/{project_id}",
-                params={},
-                headers={},
-            )
-        project_slug: str = response.get("slug")
-        if not project_slug:
-            LOGGER.warning("Could not fetch slug for project ID: %s", project_id)
-            continue
-        all_projects.append(project_slug)
-    return all_projects
+    return [f"{org_slug}/{project}" for project in response.get("all_projects", [])]
 
 
 def sync(config: dict, state: Dict, catalog: singer.Catalog):
@@ -49,7 +29,7 @@ def sync(config: dict, state: Dict, catalog: singer.Catalog):
     projects = (
         list(filter(None, client.config["project_slugs"].split(" ")))
         if config.get("project_slugs")
-        else get_all_projects(client)
+        else get_all_projects(client, config.get("org_slug"))
     )
     with singer.Transformer() as transformer:
         for stream in catalog.get_selected_streams(state):

@@ -38,7 +38,7 @@ This tap:
     ```json
     {
       "token": "your-access-token",
-      "project_slugs": "gh/singer-io/singer-python gh/singer-io/getting-started"
+      "org_slug": "gh/singer-io"
     }
     ```
 4. Run the tap in discovery mode to get catalog.json file
